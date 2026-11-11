@@ -221,13 +221,18 @@ def fill_patientweight(infusion_csv, weight_csv, output_csv):
 
     return df
 
-def rename_converse(input_csv, output_csv):
+def handle_drugrate(input_csv, output_csv):
 
     df = pd.read_csv(input_csv)
 
     # Handle nan manually
     mapping = {'30\\.br\\': 30, '50 mcg/min': 50, '50mcg/min\\.br\\': 50}
     df["drugrate"] = df["drugrate"].map(mapping).fillna(df["drugrate"])
+
+    # Convert nan into 0
+    df["drugrate"] = pd.to_numeric(df["drugrate"], errors='coerce')
+    mask = (df['drugrate'].isna())
+    df.loc[mask, 'drugrate'] = 0
 
     # Handle Epinephrine (mcg/kg/min)
     mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['drugrate'] == 999)
@@ -240,27 +245,45 @@ def rename_converse(input_csv, output_csv):
     df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
 
-    # Handle Norepinephrine (mcg/kg/min)
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[460261, 965967, 3203687, 3245946])
-    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / df.loc[mask, 'patientweight']
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[965579, 1747813, 1834162, 3035238, 3061586, 3202311, 3208702, 3224156, 3238368]) & (df['drugrate'] >= 5)
-    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / df.loc[mask, 'patientweight']
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[497354, 1603190])
-    df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
-    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[3216540, 3241952]) & (df['drugrate'] >= 5)
-    df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
-    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[1744546, 3205292]) & (df['drugrate'] >= 5)
+    # Handle outliers Epinephrine (mcg/min)
+    mask = (df['drugname'] == 'Epinephrine (mcg/min)') & (df['patientunitstayid'].isin([981819, 1003162, 1052114])) & (df['drugrate'] > 0)
+    df.loc[mask, 'drugrate'] = 0.1
+    mask = (df['drugname'] == 'Epinephrine (mcg/min)') & (df['patientunitstayid'].isin([1070252])) & (df['drugrate'] >= 300)
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 1000
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[1811491])
+    mask = (df['drugname'] == 'Epinephrine (mcg/min)') & (df['patientunitstayid'].isin([3134486])) & (df['drugrate'] >= 300)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 15
+
+    # Handle >=5 Norepinephrine (mcg/kg/min)
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([460261, 965967, 3203687, 3245946]))
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / df.loc[mask, 'patientweight']
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([965579, 1747813, 1834162, 3035238, 3061586, 3202311, 3208702, 3224156, 3238368])) & (df['drugrate'] >= 5)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / df.loc[mask, 'patientweight']
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([497354, 1603190]))
+    df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([3216540, 3241952])) & (df['drugrate'] >= 5)
+    df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([1744546, 3205292])) & (df['drugrate'] >= 5)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 1000
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([1811491]))
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 100
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[3225607]) & (df['drugrate'] >= 5)
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([3225607])) & (df['drugrate'] >= 5)
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 100
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[3146936])
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([3146936]))
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 60 / df.loc[mask, 'patientweight']
-    mask = (df['drugname'] == 'Epinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin[3226596]) & (df['drugrate'] > 0)
+    mask = (df['drugname'] == 'Norepinephrine (mcg/kg/min)') & (df['patientunitstayid'].isin([3226596])) & (df['drugrate'] > 0)
     df.loc[mask, 'drugrate'] = 0.01
+
+    # Handle outlier Norepinephrine (mcg/min)
+    mask = (df['drugname'] == 'Norepinephrine (mcg/min)') & (df['patientunitstayid'].isin([272551])) & (df['drugrate'] >= 300)
+    df = df[~mask]
+    mask = (df['drugname'] == 'Norepinephrine (mcg/min)') & (df['patientunitstayid'].isin([292154]))
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 1000
+    mask = (df['drugname'] == 'Norepinephrine (mcg/min)') & (df['patientunitstayid'].isin([514037])) & (df['drugrate'] >= 300)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / 10
+    mask = (df['drugname'] == 'Norepinephrine (mcg/min)') & (df['patientunitstayid'].isin([981819]))
+    df.loc[mask, 'drugrate'] = 0.1
 
     # Handle Levophed (mcg/kg/min)
     mask = (df['drugname'] == 'Levophed (mcg/kg/min)')
@@ -272,6 +295,10 @@ def rename_converse(input_csv, output_csv):
     mapping = {'Dopamine (mg/hr)': 'Dopamine (ml/hr)'}
     df["drugname"] = df["drugname"].map(mapping).fillna(df["drugname"])
 
+    # Handle Dopamine (mcg/min)
+    mask = (df['drugname'] == 'Dopamine (mcg/min)') & (df['drugrate'] > 200)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / 60
+
     # Handle Norepinephrine (mg/hr) with other data
     mask = (df['drugname'] == 'Norepinephrine (mg/hr)') & (df['infusionrate'].notna())
     df.loc[mask, 'infusionrate'] = df.loc[mask, 'drugrate']
@@ -282,10 +309,16 @@ def rename_converse(input_csv, output_csv):
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] * 1000 / 60 / df.loc[mask, 'patientweight']
     df.loc[mask, 'drugname'] = 'Norepinephrine (mcg/kg/min)'
 
+    # Handle Norepinephrine (units/min)
+    mask = (df['drugname'] == 'Norepinephrine (units/min)') & (df['infusionrate'] == 7500)
+    df.loc[mask, 'infusionrate'] = 7.5
+    mask = (df['drugname'] == 'Norepinephrine (units/min)')
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
+
     # Handle Epinephrine (mg/hr)
     mask = (df['drugname'] == 'Epinephrine (mg/hr)')
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
-    df.loc[mask, 'drugname'] = 'Norepinephrine (mcg/kg/min)'
+    df.loc[mask, 'drugname'] = 'Epinephrine (mcg/kg/min)'
 
     # Handle Norepinephrine (mg/kg/min)
     mask = (df['drugname'] == 'Norepinephrine (mg/kg/min)') & (df['infusionrate'] > 9000)
@@ -301,7 +334,7 @@ def rename_converse(input_csv, output_csv):
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / df.loc[mask, 'patientweight'] / 60
     df.loc[mask, 'drugname'] = 'Norepinephrine (mcg/kg/min)'
 
-    """
+
     hr =    ['Dopamine (mcg/hr)',
             'Dopamine (mcg/kg/hr)',
             'Dobutamine (mcg/kg/hr)',
@@ -323,24 +356,122 @@ def rename_converse(input_csv, output_csv):
     mask = ((df['drugname'].isin(ml)) & (df['infusionrate'].notna()) & (df['drugamount'].notna()) & (df['volumeoffluid'].notna()))
     df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / 60
 
-    mapping = {'Dopamine (ml/hr)': 'Dopamine (mcg/kg/min)', 'Dobutamine (ml/hr)': 'Dobutamine (mcg/kg/min)', 'Norepinephrine (ml/hr)': 'Norepinephrine (mcg/kg/min)',
-               'norepinephrine Volume (ml)': 'Norepinephrine (mcg/kg/min)', 'norepinephrine Volume (ml) (ml/hr)': 'Norepinephrine (mcg/kg/min)', 'levophed (ml/hr)': 'Levophed (mcg/kg/min)',
-               'Levophed (ml/hr)': 'Levophed (mcg/kg/min)', 'NSS with LEVO (ml/hr)': 'Norepinephrine (mcg/kg/min)', 'NSS w/ levo/vaso (ml/hr)': 'Norepinephrine (mcg/kg/min)', 
-               'Epinephrine (ml/hr)': 'Epinephrine (mcg/kg/min)'}
-    df["drugrate"] = df["drugrate"].map(mapping).fillna(df["drugrate"])
-    
-    
-    df = df[['patientunitstayid','infusionoffset','drugname','drugrate','infusionrate','drugamount','volumeoffluid','patientweight']]
-    df.rename(columns={'pharma_records/': 'subject_id'}, inplace=True)
-    df.rename(columns={'pharmaid': 'item'}, inplace=True)
-    df.rename(columns={'givenat': 'charttime'}, inplace=True)
+    mask = ((df['drugname'].isin(ml)) & ((df['infusionrate'].isna()) | (df['drugamount'].isna()) | (df['volumeoffluid'].isna()))) & (df['drugrate'] > 0)
+    df.loc[mask, 'drugrate'] = 0.01
 
-    mapping = {1000656: 'norepinephrine', 1000657: 'norepinephrine', 1000649: 'epinephrine', 1000650: 'epinephrine', 426: 'dobutamine'}
-    df["item"] = df["item"].map(mapping).fillna(df["item"])
+    weight = ['Dobutamine (mcg/min)', 'Dopamine (mcg/hr)', 'EPI (mcg/min)', 'EPINEPHrine(Adrenalin)MAX 30 mg Sodium Chloride 0.9% 250 ml (mcg/min)',
+              'EPINEPHrine(Adrenalin)STD 4 mg Sodium Chloride 0.9% 250 ml (mcg/min)', 'EPINEPHrine(Adrenalin)STD 4 mg Sodium Chloride 0.9% 500 ml (mcg/min)',
+              'EPINEPHrine(Adrenalin)STD 7 mg Sodium Chloride 0.9% 250 ml (mcg/min)', 'Epinephrine (mcg/hr)', 'Epinephrine (mcg/min)', 'Levophed (mcg/min)',
+              'Levophed (mg/hr)', 'Norepinephrine (mcg/hr)', 'Norepinephrine (mcg/min)', 'Norepinephrine MAX 32 mg Dextrose 5% 250 ml (mcg/min)',
+              'Norepinephrine MAX 32 mg Dextrose 5% 500 ml (mcg/min)', 'Norepinephrine STD 32 mg Dextrose 5% 282 ml (mcg/min)',
+              'Norepinephrine STD 32 mg Dextrose 5% 500 ml (mcg/min)', 'Norepinephrine STD 4 mg Dextrose 5% 250 ml (mcg/min)',
+              'Norepinephrine STD 4 mg Dextrose 5% 500 ml (mcg/min)', 'Norepinephrine STD 8 mg Dextrose 5% 250 ml (mcg/min)',
+              'Norepinephrine STD 8 mg Dextrose 5% 500 ml (mcg/min)', 'levophed  (mcg/min)', 'levophed (mcg/min)', 'Dopamine (mcg/min)',
+              'Epinepherine (mcg/min)']
+    mask = df['drugname'].isin(weight)
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugrate'] / df.loc[mask, 'patientweight']
 
-    # Converse nan into missing
-    df["drugrate"] = pd.to_numeric(df["drugrate"], errors='coerce')
-    """
+    mask = df['drugname'].isin(['Dobutamine', 'Dopamine', 'Epinephrine', 'Norepinephrine'])
+    df.loc[mask, 'drugrate'] = 0
+
+    mask = (df['drugname'].isin(['Dobutamine ()', 'Dopamine ()', 'Epinephrine ()', 'Norepinephrine ()'])) & (df['infusionrate'].notna()) & (df['drugamount'].notna()) & (df['volumeoffluid'].notna())
+    df.loc[mask, 'drugrate'] = df.loc[mask, 'drugamount'] * 1000 / df.loc[mask, 'volumeoffluid'] * df.loc[mask, 'infusionrate'] / 60
+    mask = ((df['drugname'].isin(['Dobutamine ()', 'Dopamine ()', 'Epinephrine ()', 'Norepinephrine ()'])) & ((df['infusionrate'].isna()) | (df['drugamount'].isna()) | (df['volumeoffluid'].isna()))) & (df['drugrate'] > 0)
+    df.loc[mask, 'drugrate'] = 0.01
+
+    mapping = {
+                # Dopamine
+                'Dopamine': 'dopamine'
+                , 'Dopamine ()': 'dopamine'
+                , 'DOPamine MAX 800 mg Dextrose 5% 250 ml  Premix (mcg/kg/min)': 'dopamine'
+                , 'Dopamine (mcg/hr)': 'dopamine'
+                , 'Dopamine (mcg/kg/hr)': 'dopamine'
+                , 'dopamine (mcg/kg/min)': 'dopamine'
+                , 'Dopamine (mcg/kg/min)': 'dopamine'
+                , 'Dopamine (mcg/min)': 'dopamine'
+                , 'Dopamine (mg/hr)': 'dopamine'
+                , 'Dopamine (ml/hr)': 'dopamine'
+                , 'Dopamine (nanograms/kg/min)': 'dopamine'
+                , 'DOPamine STD 15 mg Dextrose 5% 250 ml  Premix (mcg/kg/min)': 'dopamine'
+                , 'DOPamine STD 400 mg Dextrose 5% 250 ml  Premix (mcg/kg/min)': 'dopamine'
+                , 'DOPamine STD 400 mg Dextrose 5% 500 ml  Premix (mcg/kg/min)': 'dopamine'
+                , 'Dopamine (Unknown)': 'dopamine'
+                # Dobutamine
+                , 'Dobutamine (mcg/kg/min)': 'dobutamine'
+                , 'Dobutamine (mcg/min)': 'dobutamine'
+                , 'Dobutamine (ml/hr)': 'dobutamine'
+                , 'Dobutamine': 'dobutamine'
+                , 'dobutrex (mcg/kg/min)': 'dobutamine'
+                , 'dobutrex (mg/kg/min)': 'dobutamine'
+                , 'dobutrex': 'dobutamine'
+                , 'Dobutamine ()': 'dobutamine'
+                , 'Dobutamine (mcg/kg/hr)': 'dobutamine'
+                , 'Dobutamine (units/min)': 'dobutamine'
+                , 'DOBUTamine STD 500 mg Dextrose 5% 250 ml  Premix (mcg/kg/min)': 'dobutamine'
+                , 'DOBUTamine MAX 1000 mg Dextrose 5% 250 ml  Premix (mcg/kg/min)': 'dobutamine'
+                # Norepinephrine
+                , 'Norepinephrine': 'norepinephrine'
+                , 'Norepinephrine ()': 'norepinephrine'
+                , 'Norepinephrine MAX 32 mg Dextrose 5% 250 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine MAX 32 mg Dextrose 5% 500 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine (mcg/hr)': 'norepinephrine'
+                , 'Norepinephrine (mcg/kg/hr)': 'norepinephrine'
+                , 'Norepinephrine (mcg/kg/min)': 'norepinephrine'
+                , 'Norepinephrine (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine (mg/hr)': 'norepinephrine'
+                , 'Norepinephrine (mg/kg/min)': 'norepinephrine'
+                , 'Norepinephrine (mg/min)': 'norepinephrine'
+                , 'Norepinephrine (ml/hr)': 'norepinephrine'
+                , 'Norepinephrine STD 32 mg Dextrose 5% 282 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine STD 32 mg Dextrose 5% 500 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine STD 4 mg Dextrose 5% 250 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine STD 4 mg Dextrose 5% 500 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine STD 8 mg Dextrose 5% 250 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine STD 8 mg Dextrose 5% 500 ml (mcg/min)': 'norepinephrine'
+                , 'Norepinephrine (units/min)': 'norepinephrine'
+                , 'Norepinephrine (Unknown)': 'norepinephrine'
+                , 'norepinephrine Volume (ml)': 'norepinephrine'
+                , 'norepinephrine Volume (ml) (ml/hr)': 'norepinephrine'
+                , 'Levophed (mcg/kg/min)': 'norepinephrine'
+                , 'levophed  (mcg/min)': 'norepinephrine'
+                , 'levophed (mcg/min)': 'norepinephrine'
+                , 'Levophed (mcg/min)': 'norepinephrine'
+                , 'Levophed (mg/hr)': 'norepinephrine'
+                , 'levophed (ml/hr)': 'norepinephrine'
+                , 'Levophed (ml/hr)': 'norepinephrine'
+                , 'NSS with LEVO (ml/hr)': 'norepinephrine'
+                , 'NSS w/ levo/vaso (ml/hr)': 'norepinephrine'
+                # Epinephrine
+                , 'EPI (mcg/min)': 'epinephrine'
+                , 'Epinepherine (mcg/min)': 'epinephrine'
+                , 'Epinephrine': 'epinephrine'
+                , 'Epinephrine ()': 'epinephrine'
+                , 'EPINEPHrine(Adrenalin)MAX 30 mg Sodium Chloride 0.9% 250 ml (mcg/min)': 'epinephrine'
+                , 'EPINEPHrine(Adrenalin)STD 4 mg Sodium Chloride 0.9% 250 ml (mcg/min)': 'epinephrine'
+                , 'EPINEPHrine(Adrenalin)STD 4 mg Sodium Chloride 0.9% 500 ml (mcg/min)': 'epinephrine'
+                , 'EPINEPHrine(Adrenalin)STD 7 mg Sodium Chloride 0.9% 250 ml (mcg/min)': 'epinephrine'
+                , 'Epinephrine (mcg/hr)': 'epinephrine'
+                , 'Epinephrine (mcg/kg/min)': 'epinephrine'
+                , 'Epinephrine (mcg/min)': 'epinephrine'
+                , 'Epinephrine (mg/hr)': 'epinephrine'
+                , 'Epinephrine (mg/kg/min)': 'epinephrine'
+                , 'Epinephrine (ml/hr)': 'epinephrine'
+        }
+    df["drugname"] = df["drugname"].map(mapping).fillna(df["drugname"])
+    
+    df = df[['patientunitstayid','infusionoffset','drugname','drugrate','patientweight']]
+    df.rename(columns={'patientunitstayid': 'subject_id'}, inplace=True)
+    df.rename(columns={'drugname': 'item'}, inplace=True)
+    df.rename(columns={'infusionoffset': 'charttime'}, inplace=True)
+    df.rename(columns={'patientweight': 'weight'}, inplace=True)
+
+    base_time = pd.Timestamp("2050-01-01 00:00:00")
+    df['charttime'] = (
+        base_time
+        + pd.to_timedelta(pd.to_numeric(df['charttime'], errors="coerce"),
+                          unit="min")
+    ).dt.strftime("%Y-%m-%d %H:%M:%S")
+
     df.to_csv(output_csv, index=False)
     print(f"Done, result save to: {output_csv}")
 
@@ -349,5 +480,4 @@ if __name__ == "__main__":
     #filter_large_csv_by_stay_ids('../../eicu/infusionDrug.csv', './adrenal.csv', 'drugname')
     #extract_weight('../../eicu/patient.csv', './weight.csv')
     #fill_patientweight('./adrenal.csv', './weight.csv', './adrenal.csv')
-    #rename_converse('./adrenal.csv', './adrenal2.csv')
-    rename_converse('./hhh.csv', './hhh.csv')
+    handle_drugrate('./adrenal.csv', './adrenal2.csv')
